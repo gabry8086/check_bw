@@ -1,14 +1,13 @@
 #!/bin/bash
-####################################
-###### Bandwidth Usage Calculator #
-#####   by Gabriele Cozzi	##
-####	gabry8086@gmail.com   ###
-###	Requirements	    ####
-##	Snmpwalk + bc	  #####
-#  			######
-#############################
+################################################
+###### Bandwidth Usage Calculator 	       #
+#####   by Gabriele Cozzi		     ##
+####	gabry8086@gmail.com      	   ###
+###	Requirements	                 ####
+##	Snmpwalk + bc	               #####
+###########################################
 usage="
-Usage: check_bw.sh -H hostname -b connectionspeed -v snmp version -m input|output -C community
+Usage: check_bw.sh -H hostname -b connectionspeed -v snmp version -m input|output -C community -i interface
 
 
 ####List of Available Parameters
@@ -17,20 +16,22 @@ Usage: check_bw.sh -H hostname -b connectionspeed -v snmp version -m input|outpu
 -v (1|2c) Snmp version
 -m (input|output) Specify the direction of the bandwidth you want to check
 -C (some text here) Specify the name of the community associated with your host
+-i (Interface Name) Specify the interface name that you want to monitor (eg: eth0)
 -w (optional) set the warning parameter in Mb/s that is going to be passed to nagios
 -c (optional) set the critical parameter in Mb/s that is going to be passed to nagios
 -h  Print this help screen
+
 "
 #Define oid's
-oidIN=1.3.6.1.2.1.2.2.1.10.2
-oidOUT=1.3.6.1.2.1.2.2.1.16.2
+oidIN=1.3.6.1.2.1.2.2.1.10
+oidOUT=1.3.6.1.2.1.2.2.1.16
 mbmulti=1048576
 delta=30
 #mbmulti is needed to convert mib to bit
 #delta is the polling time in second
 #
 # Get Options
-while getopts H:b:m:c:v:w:C:help:h option;
+while getopts H:b:m:c:v:w:C:i:help:h option;
 do
         case $option in
                 H) hostname=$OPTARG;;
@@ -38,6 +39,7 @@ do
                 m) mode=$OPTARG;;
                 C) community=$OPTARG;;
 		v) version=$OPTARG;;
+		i) interface=$OPTARG;;
                 w) warning=$OPTARG;;
 		c) critical=$OPTARG;;
 		h) help=1;;
@@ -48,16 +50,16 @@ done
 check()
 {
 
-if [ "$help" == "1" ]
+if [ ! -z "$help" ]
 then
 echo "$usage"
 exit;
 fi
 
-if [ -z "$hostname" ] || [ -z "$community" ] || [ -z "$mode" ] || [ -z "$version" ] || [ -z "$speed" ] && [ "$help" != "1" ]
+if [ -z "$hostname" ] || [ -z "$community" ] || [ -z "$mode" ] || [ -z "$version" ] || [ -z "$speed" ] || [ -z "$interface" ] && [ "$help" != "1" ]
 then
         echo "
-** Hostname, speed, community, version and mode parameters are mandatory"
+** Hostname, speed, community, version, interface and mode parameters are mandatory"
         echo "$usage"
         exit;
 fi
@@ -108,8 +110,9 @@ nagios_r()
 #Calculate Function
 get_value()
 {
+ifindex=`/usr/bin/snmpwalk -v $version -c $community $hostname 1.3.6.1.2.1.31.1.1.1.1 | grep $interface | grep -o "\.[0-9]*\ "`
 speed=`echo "$speed*$mbmulti" | bc`
-parRes="-t 10 -v $version -c $community $hostname $oid"
+parRes="-t 10 -v $version -c $community $hostname $oid$ifindex"
 result1=`/usr/bin/snmpwalk $parRes | sed -e 's/.*: //'`
 sleep $delta
 result2=`/usr/bin/snmpwalk $parRes | sed -e 's/.*: //'`
@@ -117,7 +120,7 @@ result2=`/usr/bin/snmpwalk $parRes | sed -e 's/.*: //'`
 exp1=`echo "($result2-$result1)*8"| bc`
 perc=`echo "scale=2; ($exp1/($delta*$speed))*100" | bc`
 final=`echo "scale=3; ($exp1/$delta)/$mbmulti" | bc`
-if [[ `echo "$final" | awk '{print substr ($0,0,1)}'` ==  "." ]]
+if [ "`echo "$final" | awk '{print substr ($0,0,1)}'`" =  "." ]
 then
 final=`echo $final | awk '{printf "%.3f", $0}'`
 fi
@@ -127,7 +130,7 @@ check
 get_value
 
 #this because the oid's counter used are integer and they may reset if they reach the max value allowed so $final will result in a negative number, this will restart the calculaton
-if [ `echo "$final" | awk '{print substr ($0,0,1)}'` ==  "-" ]
+if [ "`echo "$final" | awk '{print substr ($0,0,1)}'`" =  "-" ]
 then
 get_value
 fi
