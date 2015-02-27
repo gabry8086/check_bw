@@ -7,7 +7,7 @@
 ##	Snmpwalk + bc	               #####
 ###########################################
 usage="
-Usage: check_bw.sh -H hostname -b connectionspeed -v snmp version -m input|output -C community -i interface
+Usage: check_bw.sh -H hostname -b connectionspeed -v snmp version -m input|output -C community -i interface -p pollingtime
 
 
 ####List of Available Parameters
@@ -19,19 +19,18 @@ Usage: check_bw.sh -H hostname -b connectionspeed -v snmp version -m input|outpu
 -i (Interface Name) Specify the interface name that you want to monitor (eg: eth0)
 -w (optional) set the warning parameter in Mb/s that is going to be passed to nagios
 -c (optional) set the critical parameter in Mb/s that is going to be passed to nagios
--h  Print this help screen
+-h Print this help screen
+-p Polling Time in second
 
 "
 #Define oid's
 oidIN=1.3.6.1.2.1.2.2.1.10
 oidOUT=1.3.6.1.2.1.2.2.1.16
 mbmulti=1048576
-delta=30
 #mbmulti is needed to convert mib to bit
-#delta is the polling time in second
 #
 # Get Options
-while getopts H:b:m:c:v:w:C:i:help:h option;
+while getopts H:b:m:c:v:w:C:i:p:help:h option;
 do
         case $option in
                 H) hostname=$OPTARG;;
@@ -40,6 +39,7 @@ do
                 C) community=$OPTARG;;
 		v) version=$OPTARG;;
 		i) interface=$OPTARG;;
+		p) delta=$OPTARG;;
                 w) warning=$OPTARG;;
 		c) critical=$OPTARG;;
 		h) help=1;;
@@ -56,7 +56,7 @@ echo "$usage"
 exit;
 fi
 
-if [ -z "$hostname" ] || [ -z "$community" ] || [ -z "$mode" ] || [ -z "$version" ] || [ -z "$speed" ] || [ -z "$interface" ] && [ "$help" != "1" ]
+if [ -z "$hostname" ] || [ -z "$community" ] || [ -z "$mode" ] || [ -z "$version" ] || [ -z "$speed" ] || [ -z "$interface" ] || [ -z "$delta" ] && [ "$help" != "1" ]
 then
         echo "
 ** Hostname, speed, community, version, interface and mode parameters are mandatory"
